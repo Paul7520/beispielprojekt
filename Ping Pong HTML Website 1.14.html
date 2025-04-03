@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping Pong AI</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        h1 {
+            color: white;
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+        #gameContainer {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 5px solid white; /* White outline */
+            width: 800px;
+            height: 600px;
+            background: black; /* Ensure the game container has a black background */
+        }
+        canvas {
+            display: block;
+            background: black; /* Ensure the canvas has a black background */
+        }
+        #overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 2rem;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>PING PONG</h1>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="overlay">
+            <p id="message"></p>
+            <button id="restart">Restart</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const message = document.getElementById('message');
+        const restartButton = document.getElementById('restart');
+
+        const paddleWidth = 15; // Paddle width
+        const paddleHeight = 100;
+        const ballSize = 10;
+
+        let playerY = canvas.height / 2 - paddleHeight / 2;
+        let aiY = canvas.height / 2 - paddleHeight / 2;
+        let ballX = canvas.width / 2;
+        let ballY = canvas.height / 2;
+        let ballSpeedX = 2; // Ball speed
+        let ballSpeedY = 2;
+
+        let playerLives = 3;
+        let aiLives = 3;
+        let playerSpeed = 0;
+        let playerMoveSpeed = 6;
+        let aiSpeed = 2.5; // Slightly slower AI speed
+        let ballVisible = true;
+        let timer = 120; // 2 minutes in seconds
+        let timerInterval;
+
+        function drawRect(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+        }
+
+        function drawCircle(x, y, radius, color) {
+            if (ballVisible) {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawText(text, x, y, color, size = '20px') {
+            ctx.fillStyle = color;
+            ctx.font = `${size} Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText(text, x, y);
+        }
+
+        function update() {
+            // Ball movement
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+
+            // Ball collision with top and bottom walls
+            if (ballY <= 0 || ballY >= canvas.height) {
+                ballSpeedY = -ballSpeedY;
+            }
+
+            // Ball collision with paddles
+            if (
+                ballX <= paddleWidth &&
+                ballY >= playerY &&
+                ballY <= playerY + paddleHeight
+            ) {
+                ballSpeedX = -ballSpeedX;
+            }
+
+            if (
+                ballX >= canvas.width - paddleWidth &&
+                ballY >= aiY &&
+                ballY <= aiY + paddleHeight
+            ) {
+                ballSpeedX = -ballSpeedX;
+            }
+
+            // AI paddle movement (60% chance to move correctly)
+            if (ballX > canvas.width / 2) { // Only move when the ball is on the AI's side
+                if (Math.random() > 0.4) { // 60% chance to move correctly
+                    if (ballY > aiY + paddleHeight / 2) {
+                        aiY += aiSpeed;
+                    } else if (ballY < aiY + paddleHeight / 2) {
+                        aiY -= aiSpeed;
+                    }
+                }
+            }
+
+            // Player paddle movement
+            playerY += playerSpeed;
+
+            // Wrap player paddle position
+            if (playerY < -paddleHeight / 2) {
+                playerY = canvas.height - paddleHeight / 2;
+            } else if (playerY > canvas.height - paddleHeight / 2) {
+                playerY = -paddleHeight / 2;
+            }
+
+            // Ball reset if it goes out of bounds
+            if (ballX <= 0) {
+                playerLives--;
+                resetBall();
+            } else if (ballX >= canvas.width) {
+                aiLives--;
+                resetBall();
+            }
+
+            // Check for game over
+            if (playerLives === 0) {
+                endGame('GAME OVER', 'Try Again?');
+            } else if (aiLives === 0) {
+                endGame('YOU WON', 'Another Match?');
+            }
+        }
+
+        function render() {
+            // Clear canvas
+            drawRect(0, 0, canvas.width, canvas.height, 'black');
+
+            // Draw paddles
+            drawRect(0, playerY, paddleWidth, paddleHeight, 'green'); // Player is green
+            drawRect(canvas.width - paddleWidth, aiY, paddleWidth, paddleHeight, 'blue'); // AI is blue
+
+            // Draw ball
+            drawCircle(ballX, ballY, ballSize, 'white');
+
+            // Draw lives and scores
+            drawText(`Lives: ${playerLives}`, 100, 30, 'white'); // Player lives on the left
+            drawText(`Time: ${Math.floor(timer / 60)}:${String(timer % 60).padStart(2, '0')}`, canvas.width / 2, 30, 'white'); // Timer in the center
+            drawText(`Lives: ${aiLives}`, canvas.width - 100, 30, 'white'); // AI lives on the right
+        }
+
+        function resetBall() {
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+            ballSpeedX = 2; // Ensure the ball always starts towards the AI
+            ballSpeedY = 2;
+        }
+
+        function endGame(msg, buttonText) {
+            clearInterval(timerInterval);
+            overlay.style.display = 'block';
+            message.textContent = msg;
+            restartButton.textContent = buttonText;
+            ballVisible = false; // Hide the ball
+        }
+
+        function restartGame() {
+            playerLives = 3;
+            aiLives = 3;
+            timer = 120;
+            overlay.style.display = 'none';
+            ballVisible = true; // Show the ball again
+            startTimer();
+            resetBall();
+            gameLoop();
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timer--;
+                if (timer === 0) {
+                    playerLives--;
+                    aiLives--;
+                    timer = 120;
+                }
+            }, 1000);
+        }
+
+        // Player paddle movement
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'w' || e.key === 'ArrowUp') {
+                playerSpeed = -playerMoveSpeed;
+            } else if (e.key === 's' || e.key === 'ArrowDown') {
+                playerSpeed = playerMoveSpeed;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (
+                e.key === 'w' ||
+                e.key === 'ArrowUp' ||
+                e.key === 's' ||
+                e.key === 'ArrowDown'
+            ) {
+                playerSpeed = 0;
+            }
+        });
+
+        restartButton.addEventListener('click', restartGame);
+
+        startTimer();
+        gameLoop();
+
+        function gameLoop() {
+            if (playerLives > 0 && aiLives > 0) {
+                update();
+                render();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>
